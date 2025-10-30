@@ -15,6 +15,9 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 9.0.x
+        env:
+          DOTNET_INSTALL_DIR: C:\actions-runner\dotnet
+
 
       - name: Build project
         run: dotnet publish ./src/HelloWorldApi/HelloWorldApi.csproj -c Release -o ./publish
