@@ -12,43 +12,42 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      # ==========================================
-      # CLEANUP EXISTING RESOURCES
-      # ==========================================
       - name: Delete Existing Resources
         shell: powershell
         run: |
-          Write-Host "🔍 Checking for existing resources..."
-
-          # Check App Service Plan
-          Write-Host "`nChecking App Service Plan..."
-          az appservice plan show --name photoapi-plan --resource-group rg-group1-sch --query "name" -o tsv 2>$null | Out-Null
-
-          if ($LASTEXITCODE -eq 0) {
-              Write-Host "✅ App Service Plan EXISTS - will delete it"
-              az appservice plan delete --name photoapi-plan --resource-group rg-group1-sch --yes
-              Write-Host "✅ App Service Plan deleted"
-          } else {
-              Write-Host "ℹ️ App Service Plan does NOT exist - nothing to delete"
-          }
-
-          # Check App Service
-          Write-Host "`nChecking App Service..."
-          az webapp show --name photoapi-app --resource-group rg-group1-sch --query "name" -o tsv 2>$null | Out-Null
-
-          if ($LASTEXITCODE -eq 0) {
-              Write-Host "✅ App Service EXISTS - will delete it"
+          Write-Host "========================================"
+          Write-Host "STEP 1: Cleaning up existing resources"
+          Write-Host "========================================"
+          
+          Write-Host ""
+          Write-Host "Checking App Service..."
+          $appName = az webapp show --name photoapi-app --resource-group rg-group1-sch --query "name" -o tsv 2>$null
+          
+          if ($appName) {
+              Write-Host "Found App Service: $appName"
+              Write-Host "Deleting..."
               az webapp delete --name photoapi-app --resource-group rg-group1-sch
-              Write-Host "✅ App Service deleted"
+              Write-Host "App Service deleted"
           } else {
-              Write-Host "ℹ️ App Service does NOT exist - nothing to delete"
+              Write-Host "App Service does not exist - skipping"
           }
-
-          Write-Host "`n✅ Resource check complete"
+          
+          Write-Host ""
+          Write-Host "Checking App Service Plan..."
+          $planName = az appservice plan show --name photoapi-plan --resource-group rg-group1-sch --query "name" -o tsv 2>$null
+          
+          if ($planName) {
+              Write-Host "Found App Service Plan: $planName"
+              Write-Host "Deleting..."
+              az appservice plan delete --name photoapi-plan --resource-group rg-group1-sch --yes
+              Write-Host "App Service Plan deleted"
+          } else {
+              Write-Host "App Service Plan does not exist - skipping"
+          }
+          
+          Write-Host ""
+          Write-Host "Cleanup complete"
       
-      # ==========================================
-      # INFRASTRUCTURE (Terraform)
-      # ==========================================
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
@@ -57,18 +56,28 @@ jobs:
       - name: Terraform Init
         working-directory: ./infra
         shell: powershell
-        run: terraform init
+        run: |
+          Write-Host "========================================"
+          Write-Host "STEP 2: Initializing Terraform"
+          Write-Host "========================================"
+          terraform init
       
-      - name: Terraform Plan & Apply
+      - name: Terraform Plan and Apply
         working-directory: ./infra
         shell: powershell
         run: |
+          Write-Host "========================================"
+          Write-Host "STEP 3: Creating Infrastructure"
+          Write-Host "========================================"
+          Write-Host ""
+          Write-Host "Running Terraform Plan..."
           terraform plan
+          Write-Host ""
+          Write-Host "Applying Terraform..."
           terraform apply -auto-approve
+          Write-Host ""
+          Write-Host "Infrastructure created"
       
-      # ==========================================
-      # APPLICATION DEPLOYMENT
-      # ==========================================
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
@@ -77,15 +86,27 @@ jobs:
           DOTNET_INSTALL_DIR: C:\actions-runner\dotnet
       
       - name: Build .NET Project
-        run: dotnet publish ./src/HelloWorldApi/HelloWorldApi.csproj -c Release -o ./publish
+        run: |
+          Write-Host "========================================"
+          Write-Host "STEP 4: Building .NET Application"
+          Write-Host "========================================"
+          dotnet publish ./src/HelloWorldApi/HelloWorldApi.csproj -c Release -o ./publish
+          Write-Host "Build complete"
       
-      - name: Deploy to Azure
+      - name: Deploy to Azure Web App
         shell: powershell
         run: |
+          Write-Host "========================================"
+          Write-Host "STEP 5: Deploying to Azure"
+          Write-Host "========================================"
+          Write-Host ""
+          Write-Host "Creating deployment package..."
           Compress-Archive -Path ./publish/* -DestinationPath ./publish.zip -Force
           
-          az webapp deploy `
-            --name photoapi-app `
-            --resource-group rg-group1-sch `
-            --src-path "./publish.zip" `
-            --type zip
+          Write-Host "Deploying to Azure Web App..."
+          az webapp deploy --name photoapi-app --resource-group rg-group1-sch --src-path "./publish.zip" --type zip
+          
+          Write-Host ""
+          Write-Host "========================================"
+          Write-Host "DEPLOYMENT COMPLETE!"
+          Write-Host "========================================"
