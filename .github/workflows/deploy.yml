@@ -15,6 +15,9 @@ jobs:
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: 1.7.0
+      
+      - name: Verify Terraform installation
+        run: terraform version
 
       - name: Terraform Init
         working-directory: ./infra
