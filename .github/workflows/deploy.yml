@@ -1,4 +1,4 @@
-name: Deploy API via self-hosted runner
+name: Build & Deploy .NET (self-hosted)
 
 on:
   push:
@@ -18,24 +18,25 @@ jobs:
         env:
           DOTNET_INSTALL_DIR: C:\actions-runner\dotnet
 
-      - name: Build project
-        run: dotnet publish ./src/HelloWorldApi/HelloWorldApi.csproj -c Release #-o ./publish
+      - name: Build & publish
+        run: dotnet publish ./src/HelloWorldApi/HelloWorldApi.csproj -c Release -o ./src/HelloWorldApi/bin/Release/net9.0/publish
 
-      # - name: Deploy to Azure
-      #   run: |
-      #     az webapp deploy `
-      #     --name photoapi-app `
-      #     --resource-group rg-group1-sch `
-      #     --src-path "./publish" `
-      #     --type zip
-      
+      - name: Validate publish folder
+        run: |
+          if (-not (Test-Path -Path "src/HelloWorldApi/bin/Release/net9.0/publish")) { 
+            Write-Error "Publish folder not found"; exit 1 
+          }
+        shell: powershell
+
       - name: Deploy using Publish Profile
         env:
           PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
         run: |
           az webapp deploy `
-          --name photoapi-app `
-          --resource-group rg-group1-sch `
-          --src-path "./src/HelloWorldApi/bin/Release/net9.0/publish/" `
-          --type zip `
-          --publish-profile "$env:PUBLISH_PROFILE"
+            --name photoapi-app `
+            --resource-group rg-group1-sch `
+            --src-path "src/HelloWorldApi/bin/Release/net9.0/publish" `
+            --type zip `
+            --timeout 1800 `
+            --publish-profile "$env:PUBLISH_PROFILE"
+        shell: powershell
