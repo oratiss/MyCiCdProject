@@ -16,11 +16,6 @@ jobs:
         with:
           terraform_version: 1.7.0
 
-      - name: Azure Login
-        uses: azure/login@v1
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
       - name: Terraform Init
         working-directory: ./infra
         run: terraform init
@@ -72,11 +67,10 @@ jobs:
       - name: Build project
         run: dotnet publish ./src/HelloWorldApi/HelloWorldApi.csproj -c Release -o ./publish
 
-      #comment2
-      - name: Deploy to Azure 
-        run: |
-          az webapp deploy `
-          --name photoapi-app `
-          --resource-group rg-group1-sch `
-          --src-path "./publish" `
-          --type zip
+      # Deploy using Publish Profile instead of SP login
+      - name: Deploy to Azure via Publish Profile
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: 'photoapi-app'
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: './publish'
