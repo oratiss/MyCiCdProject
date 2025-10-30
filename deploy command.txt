@@ -1,0 +1,1 @@
+az webapp deploy   --name dotnet9-api-canada   --resource-group rg-dotnet9-api-canada   --src-path "./publish"
