@@ -1,12 +1,63 @@
-name: Deploy API via self-hosted runner
+name: Terraform + .NET Deploy via Self-Hosted Runner
 
 on:
   push:
     branches: [ "main" ]
 
 jobs:
+  terraform:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.7.0
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Terraform Init
+        working-directory: ./infra
+        run: terraform init
+
+      - name: Import existing resources if present
+        working-directory: ./infra
+        shell: pwsh
+        run: |
+          # Check and import App Service Plan
+          $planExists = az appservice plan show `
+            --name photoapi-plan `
+            --resource-group rg-group1-sch `
+            --query "name" -o tsv 2>$null
+          if ($planExists) {
+            Write-Host "Importing existing App Service Plan into Terraform state..."
+            terraform import azurerm_app_service_plan.plan "/subscriptions/18a54fef-d36d-4d1c-b7b4-c468a773149b/resourceGroups/rg-group1-sch/providers/Microsoft.Web/serverfarms/photoapi-plan"
+          }
+
+          # Check and import App Service
+          $appExists = az webapp show `
+            --name photoapi-app `
+            --resource-group rg-group1-sch `
+            --query "name" -o tsv 2>$null
+          if ($appExists) {
+            Write-Host "Importing existing App Service into Terraform state..."
+            terraform import azurerm_app_service.app "/subscriptions/18a54fef-d36d-4d1c-b7b4-c468a773149b/resourceGroups/rg-group1-sch/providers/Microsoft.Web/sites/photoapi-app"
+          }
+
+      - name: Terraform Plan & Apply
+        working-directory: ./infra
+        run: |
+          terraform plan
+          terraform apply -auto-approve
+
   build-and-deploy:
-    runs-on: self-hosted  # 👈 this line is critical
+    runs-on: self-hosted
+    needs: terraform
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -17,7 +68,6 @@ jobs:
           dotnet-version: 9.0.x
         env:
           DOTNET_INSTALL_DIR: C:\actions-runner\dotnet
-
 
       - name: Build project
         run: dotnet publish ./src/HelloWorldApi/HelloWorldApi.csproj -c Release -o ./publish
