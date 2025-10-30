@@ -19,7 +19,7 @@ jobs:
           DOTNET_INSTALL_DIR: C:\actions-runner\dotnet
 
       - name: Build project
-        run: dotnet publish ./src/HelloWorldApi/HelloWorldApi.csproj -c Release -o ./publish
+        run: dotnet publish ./src/HelloWorldApi/HelloWorldApi.csproj -c Release #-o ./publish
 
       - name: Deploy to Azure
         run: |
@@ -36,6 +36,6 @@ jobs:
           az webapp deploy `
           --name photoapi-app `
           --resource-group rg-group1-sch `
-          --src-path "./publish" `
+          --src-path "./src/HelloWorldApi/bin/Release/net9.0/publish/" `
           --type zip `
           --publish-profile "$env:PUBLISH_PROFILE"
