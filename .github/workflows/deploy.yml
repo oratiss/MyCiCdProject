@@ -18,39 +18,33 @@ jobs:
       - name: Delete Existing Resources
         shell: powershell
         run: |
-          Write-Host "🗑️ Checking for existing resources to delete..."
-          
-          # Delete App Service first (depends on plan)
-          $appExists = $null
-          try {
-            $appExists = az webapp show `
-              --name photoapi-app `
-              --resource-group rg-group1-sch `
-              --query "name" -o tsv 2>$null
-          } catch {}
-          
-          if ($appExists) {
-            Write-Host "Deleting App Service..."
-            az webapp delete --name photoapi-app --resource-group rg-group1-sch
-            Write-Host "✅ App Service deleted"
+          Write-Host "🔍 Checking for existing resources..."
+
+          # Check App Service Plan
+          Write-Host "`nChecking App Service Plan..."
+          az appservice plan show --name photoapi-plan --resource-group rg-group1-sch --query "name" -o tsv 2>$null | Out-Null
+
+          if ($LASTEXITCODE -eq 0) {
+              Write-Host "✅ App Service Plan EXISTS - will delete it"
+              az appservice plan delete --name photoapi-plan --resource-group rg-group1-sch --yes
+              Write-Host "✅ App Service Plan deleted"
+          } else {
+              Write-Host "ℹ️ App Service Plan does NOT exist - nothing to delete"
           }
-          
-          # Delete App Service Plan
-          $planExists = $null
-          try {
-            $planExists = az appservice plan show `
-              --name photoapi-plan `
-              --resource-group rg-group1-sch `
-              --query "name" -o tsv 2>$null
-          } catch {}
-          
-          if ($planExists) {
-            Write-Host "Deleting App Service Plan..."
-            az appservice plan delete --name photoapi-plan --resource-group rg-group1-sch --yes
-            Write-Host "✅ App Service Plan deleted"
+
+          # Check App Service
+          Write-Host "`nChecking App Service..."
+          az webapp show --name photoapi-app --resource-group rg-group1-sch --query "name" -o tsv 2>$null | Out-Null
+
+          if ($LASTEXITCODE -eq 0) {
+              Write-Host "✅ App Service EXISTS - will delete it"
+              az webapp delete --name photoapi-app --resource-group rg-group1-sch
+              Write-Host "✅ App Service deleted"
+          } else {
+              Write-Host "ℹ️ App Service does NOT exist - nothing to delete"
           }
-          
-          Write-Host "🎯 Cleanup complete - ready for Terraform"
+
+          Write-Host "`n✅ Resource check complete"
       
       # ==========================================
       # INFRASTRUCTURE (Terraform)
