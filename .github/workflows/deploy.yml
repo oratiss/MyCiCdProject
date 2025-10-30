@@ -24,8 +24,8 @@ jobs:
 
       - name: Deploy to Azure
         run: |
-          az webapp deploy \
-            --name photoapi-app \
-            --resource-group rg-group1-sch \
-            --src-path "./publish" \
-            --type zip
+          az webapp deploy `
+          --name photoapi-app `
+          --resource-group rg-group1-sch `
+          --src-path "./publish" `
+          --type zip
