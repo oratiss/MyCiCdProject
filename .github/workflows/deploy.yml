@@ -72,7 +72,7 @@ jobs:
       - name: Build project
         run: dotnet publish ./src/HelloWorldApi/HelloWorldApi.csproj -c Release -o ./publish
 
-      #comment
+      #comment2
       - name: Deploy to Azure 
         run: |
           az webapp deploy `
