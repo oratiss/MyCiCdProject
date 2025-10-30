@@ -72,7 +72,8 @@ jobs:
       - name: Build project
         run: dotnet publish ./src/HelloWorldApi/HelloWorldApi.csproj -c Release -o ./publish
 
-      - name: Deploy to Azure
+      #comment
+      - name: Deploy to Azure 
         run: |
           az webapp deploy `
           --name photoapi-app `
