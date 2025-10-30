@@ -1,111 +1,41 @@
-name: Deploy to Azure
+name: Deploy API via self-hosted runner
 
 on:
   push:
     branches: [ "main" ]
-  workflow_dispatch:
 
 jobs:
-  deploy-all:
+  build-and-deploy:
     runs-on: self-hosted
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
-      - name: Delete Existing Resources
-        shell: powershell
-        run: |
-          Write-Host "========================================"
-          Write-Host "STEP 1: Cleaning up existing resources"
-          Write-Host "========================================"
-          
-          Write-Host ""
-          Write-Host "Checking App Service..."
-          az webapp show --name photoapi-app --resource-group rg-group1-sch --query "name" -o tsv 2>$null | Out-Null
-          
-          if ($LASTEXITCODE -eq 0) {
-              Write-Host "Found App Service - deleting..."
-              az webapp delete --name photoapi-app --resource-group rg-group1-sch
-              Write-Host "App Service deleted"
-          } else {
-              Write-Host "App Service does not exist - skipping"
-          }
-          
-          Write-Host ""
-          Write-Host "Checking App Service Plan..."
-          az appservice plan show --name photoapi-plan --resource-group rg-group1-sch --query "name" -o tsv 2>$null | Out-Null
-          
-          if ($LASTEXITCODE -eq 0) {
-              Write-Host "Found App Service Plan - deleting..."
-              az appservice plan delete --name photoapi-plan --resource-group rg-group1-sch --yes
-              Write-Host "App Service Plan deleted"
-          } else {
-              Write-Host "App Service Plan does not exist - skipping"
-          }
-          
-          Write-Host ""
-          Write-Host "Cleanup complete"
-      
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: 1.7.0
-      
-      - name: Terraform Init
-        working-directory: ./infra
-        shell: powershell
-        run: |
-          Write-Host "========================================"
-          Write-Host "STEP 2: Initializing Terraform"
-          Write-Host "========================================"
-          terraform init
-      
-      - name: Terraform Plan and Apply
-        working-directory: ./infra
-        shell: powershell
-        run: |
-          Write-Host "========================================"
-          Write-Host "STEP 3: Creating Infrastructure"
-          Write-Host "========================================"
-          Write-Host ""
-          Write-Host "Running Terraform Plan..."
-          terraform plan
-          Write-Host ""
-          Write-Host "Applying Terraform..."
-          terraform apply -auto-approve
-          Write-Host ""
-          Write-Host "Infrastructure created"
-      
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 9.0.x
         env:
           DOTNET_INSTALL_DIR: C:\actions-runner\dotnet
-      
-      - name: Build .NET Project
-        shell: powershell
+
+      - name: Build project
+        run: dotnet publish ./src/HelloWorldApi/HelloWorldApi.csproj -c Release -o ./publish
+
+      - name: Deploy to Azure
         run: |
-          Write-Host "========================================"
-          Write-Host "STEP 4: Building .NET Application"
-          Write-Host "========================================"
-          dotnet publish ./src/HelloWorldApi/HelloWorldApi.csproj -c Release -o ./publish
-          Write-Host "Build complete"
+          az webapp deploy `
+          --name photoapi-app `
+          --resource-group rg-group1-sch `
+          --src-path "./publish" `
+          --type zip
       
-      - name: Deploy to Azure Web App
-        shell: powershell
+      - name: Deploy using Publish Profile
+        env:
+          PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
         run: |
-          Write-Host "========================================"
-          Write-Host "STEP 5: Deploying to Azure"
-          Write-Host "========================================"
-          Write-Host ""
-          Write-Host "Creating deployment package..."
-          Compress-Archive -Path ./publish/* -DestinationPath ./publish.zip -Force
-          
-          Write-Host "Deploying to Azure Web App..."
-          az webapp deploy --name photoapi-app --resource-group rg-group1-sch --src-path "./publish.zip" --type zip
-          
-          Write-Host ""
-          Write-Host "========================================"
-          Write-Host "DEPLOYMENT COMPLETE!"
-          Write-Host "========================================"
+          az webapp deploy `
+          --name photoapi-app `
+          --resource-group rg-group1-sch `
+          --src-path "./publish" `
+          --type zip `
+          --publish-profile "$env:PUBLISH_PROFILE"
