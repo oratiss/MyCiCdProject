@@ -1,121 +1,97 @@
-name: Terraform + .NET Deploy via Self-Hosted Runner
+name: Deploy to Azure
 
 on:
   push:
     branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
-  # ------------------------------
-  # 1️⃣ Check Terraform version
-  # ------------------------------
-  check-terraform-version:
+  deploy-all:
     runs-on: self-hosted
-    steps:
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: 1.7.0
-
-      - name: Verify Terraform version
-        run: terraform version
-
-  # ------------------------------
-  # 2️⃣ Terraform Infrastructure
-  # ------------------------------
-  terraform:
-    runs-on: self-hosted
-    needs: check-terraform-version
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: 1.7.0
-
-      # - name: Azure Login
-      #   uses: azure/login@v1
-      #   with:
-      #     creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: Terraform Init
-        working-directory: ./infra
-        run: terraform init
-
-      - name: Import existing App Service Plan and App Service
-        working-directory: ./infra
+      
+      # ==========================================
+      # CLEANUP EXISTING RESOURCES
+      # ==========================================
+      - name: Delete Existing Resources
         shell: powershell
         run: |
-          Write-Host "Checking if App Service Plan exists..."
-          $planExists = ""
-          try {
-            $planExists = az appservice plan show `
-              --name photoapi-plan `
-              --resource-group rg-group1-sch `
-              --query "name" -o tsv 2>$null | Out-String
-          } catch {
-            Write-Host "Warning suppressed: $_"
-          }
-
-          if ($planExists.Trim()) {
-            Write-Host "✅ Importing existing App Service Plan..."
-            terraform import azurerm_app_service_plan.plan "/subscriptions/18a54fef-d36d-4d1c-b7b4-c468a773149b/resourceGroups/rg-group1-sch/providers/Microsoft.Web/serverfarms/photoapi-plan"
-          } else {
-            Write-Host "ℹ️ App Service Plan does not exist — will be created by Terraform."
-          }
-
-          Write-Host "Checking if App Service exists..."
-          $appExists = ""
+          Write-Host "🗑️ Checking for existing resources to delete..."
+          
+          # Delete App Service first (depends on plan)
+          $appExists = $null
           try {
             $appExists = az webapp show `
               --name photoapi-app `
               --resource-group rg-group1-sch `
-              --query "name" -o tsv 2>$null | Out-String
-          } catch {
-            Write-Host "Warning suppressed: $_"
+              --query "name" -o tsv 2>$null
+          } catch {}
+          
+          if ($appExists) {
+            Write-Host "Deleting App Service..."
+            az webapp delete --name photoapi-app --resource-group rg-group1-sch
+            Write-Host "✅ App Service deleted"
           }
-
-          if ($appExists.Trim()) {
-            Write-Host "✅ Importing existing App Service..."
-            terraform import azurerm_app_service.app "/subscriptions/18a54fef-d36d-4d1c-b7b4-c468a773149b/resourceGroups/rg-group1-sch/providers/Microsoft.Web/sites/photoapi-app"
-          } else {
-            Write-Host "ℹ️ App Service does not exist — will be created by Terraform."
+          
+          # Delete App Service Plan
+          $planExists = $null
+          try {
+            $planExists = az appservice plan show `
+              --name photoapi-plan `
+              --resource-group rg-group1-sch `
+              --query "name" -o tsv 2>$null
+          } catch {}
+          
+          if ($planExists) {
+            Write-Host "Deleting App Service Plan..."
+            az appservice plan delete --name photoapi-plan --resource-group rg-group1-sch --yes
+            Write-Host "✅ App Service Plan deleted"
           }
-
+          
+          Write-Host "🎯 Cleanup complete - ready for Terraform"
+      
+      # ==========================================
+      # INFRASTRUCTURE (Terraform)
+      # ==========================================
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.7.0
+      
+      - name: Terraform Init
+        working-directory: ./infra
+        shell: powershell
+        run: terraform init
+      
       - name: Terraform Plan & Apply
         working-directory: ./infra
+        shell: powershell
         run: |
           terraform plan
           terraform apply -auto-approve
-
-  # ------------------------------
-  # 3️⃣ .NET Build + Deploy
-  # ------------------------------
-  build-and-deploy:
-    runs-on: self-hosted
-    needs: terraform
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
+      
+      # ==========================================
+      # APPLICATION DEPLOYMENT
+      # ==========================================
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 9.0.x
         env:
           DOTNET_INSTALL_DIR: C:\actions-runner\dotnet
-
-      - name: Build project
+      
+      - name: Build .NET Project
         run: dotnet publish ./src/HelloWorldApi/HelloWorldApi.csproj -c Release -o ./publish
-
-      - name: Deploy using Publish Profile
-        env:
-          PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+      
+      - name: Deploy to Azure
+        shell: powershell
         run: |
+          Compress-Archive -Path ./publish/* -DestinationPath ./publish.zip -Force
+          
           az webapp deploy `
-          --name photoapi-app `
-          --resource-group rg-group1-sch `
-          --src-path "./publish" `
-          --type zip `
-          --publish-profile "$env:PUBLISH_PROFILE"
+            --name photoapi-app `
+            --resource-group rg-group1-sch `
+            --src-path "./publish.zip" `
+            --type zip
