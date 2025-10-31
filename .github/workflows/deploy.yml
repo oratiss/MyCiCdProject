@@ -28,4 +28,3 @@ jobs:
           app-name: 'photoapi-app'
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           package: './publish'
-          #removing this in next commit: test comment to test pipeline after push 
